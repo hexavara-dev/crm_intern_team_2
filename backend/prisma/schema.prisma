@@ -1,0 +1,546 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+}
+
+model Tenant {
+  id             String          @id @default(uuid()) @db.VarChar(36)
+  name           String          @db.VarChar(150)
+  plan           String          @default("free") @db.VarChar(30)
+  createdAt      DateTime        @default(now()) @map("created_at") @db.DateTime(6)
+  customers      Customer[]
+  deals          Deal[]
+  dealActivities DealActivity[]
+  inventorySlots InventorySlot[]
+  invites        Invite[]
+  items          Item[]
+  itemCategories ItemCategory[]
+  leads          Lead[]
+  leadActivities LeadActivity[]
+  locations      Location[]
+  operations     Operation[]
+  organizations  Organization[]
+  stages         Stage[]
+  statuses       Status[]
+  users          User[]
+  viewings       Viewing[]
+  attachments    Attachment[]
+  leadItems      LeadItem[]
+  notes          Note[]
+  tasks          Task[]
+  callLogs       CallLog[]
+  gridConfigs    GridConfig[]
+  entries        Entry[]
+  records        Record[]
+  auditLogs      AuditLog[]
+  Source         Source[]
+
+  @@map("tenant")
+}
+
+model User {
+  id             String         @id @default(uuid()) @db.VarChar(36)
+  tenantId       String         @map("tenant_id") @db.VarChar(36)
+  email          String         @unique @db.VarChar(255)
+  name           String?        @db.VarChar(150)
+  role           String         @default("member") @db.VarChar(20)
+  createdAt      DateTime       @default(now()) @map("created_at") @db.DateTime(6)
+  password       String         @db.VarChar(255)
+  assignedDeals  Deal[]         @relation("UserAssignedDeals")
+  dealActivities DealActivity[]
+  invites        Invite[]       @relation("HostUserInvites")
+  assignedLeads  Lead[]         @relation("UserAssignedLeads")
+  sourcedLeads   Lead[]         @relation("UserSourceLeads")
+  leadActivities LeadActivity[]
+  operations     Operation[]
+  tasks          Task[]         @relation("UserAssignedTasks")
+  tenant         Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  viewings       Viewing[]      @relation("ActorViewings")
+  auditLogs      AuditLog[]
+
+  @@map("user")
+}
+
+model Invite {
+  id         String    @id @default(uuid()) @db.VarChar(36)
+  tenantId   String    @map("tenant_id") @db.VarChar(36)
+  hostUserId String    @map("host_user_id") @db.VarChar(36)
+  email      String    @db.VarChar(255)
+  name       String?   @db.VarChar(150)
+  role       String    @default("member") @db.VarChar(20)
+  acceptedAt DateTime? @map("accepted_at") @db.DateTime(6)
+  invitedAt  DateTime  @default(now()) @map("invited_at") @db.DateTime(6)
+  expiresAt  DateTime  @default(dbgenerated("(now() + interval 7 day)")) @map("expires_at") @db.DateTime(6)
+  hostUser   User      @relation("HostUserInvites", fields: [hostUserId], references: [id], onDelete: Cascade)
+  tenant     Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@map("invite")
+}
+
+model Stage {
+  id              String  @id @default(uuid()) @db.VarChar(36)
+  tenantId        String  @map("tenant_id") @db.VarChar(36)
+  name            String  @db.VarChar(100)
+  position        Int     @default(0)
+  color           String?
+  entityType      String  @default("lead") @map("entity_type") @db.VarChar(10)
+  isTerminalStage Boolean @default(false) @map("is_terminal")
+  isDefaultStage  Boolean @default(false) @map("is_default")
+  deals           Deal[]
+  leads           Lead[]
+  tenant          Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@map("stage")
+}
+
+model Status {
+  id              String    @id @default(uuid()) @db.VarChar(36)
+  tenantId        String    @map("tenant_id") @db.VarChar(36)
+  name            String    @db.VarChar(100)
+  priority        Int       @default(0)
+  color           String?   @db.VarChar(7)
+  type            String    @default("lead") @db.VarChar(10)
+  isDefaultStatus Boolean   @default(false) @map("is_default_status")
+  isClosingStatus Boolean   @default(false) @map("is_closing_status")
+  isFailedStatus  Boolean   @default(false) @map("is_failed_status")
+  isSystemStatus  Boolean   @default(false) @map("is_system_status")
+  deals           Deal[]
+  leads           Lead[]
+  viewings        Viewing[]
+  tenant          Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@map("status")
+}
+
+model Organization {
+  id        String     @id @default(uuid()) @db.VarChar(36)
+  tenantId  String     @map("tenant_id") @db.VarChar(36)
+  name      String     @db.VarChar(150)
+  location  String?
+  customers Customer[]
+  tenant    Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@map("organization")
+}
+
+model Customer {
+  id               String         @id @default(uuid()) @db.VarChar(36)
+  tenantId         String         @map("tenant_id") @db.VarChar(36)
+  organizationId   String?        @map("organization_id") @db.VarChar(36)
+  firstName        String         @map("first_name") @db.VarChar(100)
+  lastName         String?        @map("last_name") @db.VarChar(100)
+  phoneNumber      String?        @map("phone_number") @db.VarChar(30)
+  email            String?        @db.VarChar(255)
+  gender           String?        @db.VarChar(20)
+  salutation       String?        @db.VarChar(20)
+  attachedDocument String?        @map("attached_document")
+  location         String?
+  createdAt        DateTime       @default(now()) @map("created_at") @db.DateTime(6)
+  organization     Organization?  @relation(fields: [organizationId], references: [id])
+  tenant           Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  dealActivities   DealActivity[]
+  leads            Lead[]
+  leadActivities   LeadActivity[]
+
+  @@map("customer")
+}
+
+model Lead {
+  id             String         @id @default(uuid()) @db.VarChar(36)
+  tenantId       String         @map("tenant_id") @db.VarChar(36)
+  customerId     String         @map("customer_id") @db.VarChar(36)
+  sourceUserId   String?        @map("source_user_id") @db.VarChar(36)
+  assignedUserId String?        @map("assigned_user_id") @db.VarChar(36)
+  stageId        String?        @map("stage_id") @db.VarChar(36)
+  statusId       String?        @map("status_id") @db.VarChar(36)
+  type           String?        @db.VarChar(50)
+  isDeleted      Boolean        @default(false) @map("is_deleted")
+  converted      Boolean        @default(false)
+  convertedDate  DateTime?      @map("converted_date") @db.DateTime(6)
+  createdAt      DateTime       @default(now()) @map("created_at") @db.DateTime(6)
+  deals          Deal[]
+  assignedUser   User?          @relation("UserAssignedLeads", fields: [assignedUserId], references: [id])
+  customer       Customer       @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  sourceUser     User?          @relation("UserSourceLeads", fields: [sourceUserId], references: [id])
+  stage          Stage?         @relation(fields: [stageId], references: [id])
+  status         Status?        @relation(fields: [statusId], references: [id])
+  tenant         Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  activities     LeadActivity[]
+  items          LeadItem[]
+  viewings       Viewing[]
+  attachments    Attachment[]
+  locationId     String?        @map("location_id") @db.VarChar(36)
+  location       Location?      @relation(fields: [locationId], references: [id])
+  source         Source?        @relation(fields: [sourceId], references: [id])
+  sourceId       String?        @db.VarChar(36)
+
+  @@map("lead")
+}
+
+model LeadItem {
+  id        String         @id @default(uuid()) @db.VarChar(36)
+  tenantId  String?        @map("tenant_id") @db.VarChar(36)
+  leadId    String         @map("lead_id") @db.VarChar(36)
+  itemId    String         @map("item_id") @db.VarChar(36)
+  slotId    String?        @map("slot_id") @db.VarChar(36)
+  quantity  Int            @default(1)
+  createdAt DateTime       @default(now()) @map("created_at") @db.DateTime(6)
+  item      Item           @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  lead      Lead           @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  slot      InventorySlot? @relation(fields: [slotId], references: [id])
+  tenant    Tenant?        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@map("lead_item")
+}
+
+model Deal {
+  id                  String         @id @default(uuid()) @db.VarChar(36)
+  tenantId            String         @map("tenant_id") @db.VarChar(36)
+  leadId              String?        @map("lead_id") @db.VarChar(36)
+  assignedUserId      String?        @map("assigned_user_id") @db.VarChar(36)
+  stageId             String?        @map("stage_id") @db.VarChar(36)
+  statusId            String?        @map("status_id") @db.VarChar(36)
+  refCode             String?        @unique @map("ref_code") @db.VarChar(80)
+  dealType            String?        @map("deal_type") @db.VarChar(50)
+  expectedAmount      Decimal?       @map("expected_amount") @db.Decimal(14, 2)
+  amount              Decimal?       @db.Decimal(14, 2)
+  currency            String         @default("USD") @db.VarChar(3)
+  expectedClosingDate DateTime?      @map("expected_closing_date") @db.Date
+  closingDate         DateTime?      @map("closing_date") @db.Date
+  lostReason          String?        @map("lost_reason")
+  lostNotes           String?        @map("lost_notes")
+  createdAt           DateTime       @default(now()) @map("created_at") @db.DateTime(6)
+  confirmedAt         DateTime?      @map("confirmed_at") @db.DateTime(6)
+  assignedUser        User?          @relation("UserAssignedDeals", fields: [assignedUserId], references: [id])
+  lead                Lead?          @relation(fields: [leadId], references: [id])
+  stage               Stage?         @relation(fields: [stageId], references: [id])
+  status              Status?        @relation(fields: [statusId], references: [id])
+  tenant              Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  activities          DealActivity[]
+  records             Record[]
+  attachments         Attachment[]
+  source              Source?        @relation(fields: [sourceId], references: [id])
+  sourceId            String?        @db.VarChar(36)
+
+  @@map("deal")
+}
+
+model LeadActivity {
+  id           String    @id @default(uuid()) @db.VarChar(36)
+  tenantId     String    @map("tenant_id") @db.VarChar(36)
+  leadId       String    @map("lead_id") @db.VarChar(36)
+  customerId   String?   @map("customer_id") @db.VarChar(36)
+  actorId      String?   @map("actor_id") @db.VarChar(36)
+  activityType String    @map("activity_type") @db.VarChar(30)
+  createdAt    DateTime  @default(now()) @map("created_at") @db.DateTime(6)
+  callLogs     CallLog[]
+  actor        User?     @relation(fields: [actorId], references: [id])
+  customer     Customer? @relation(fields: [customerId], references: [id])
+  lead         Lead      @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  tenant       Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  notes        Note[]
+  tasks        Task[]
+
+  @@map("lead_activity")
+}
+
+model DealActivity {
+  id           String    @id @default(uuid()) @db.VarChar(36)
+  tenantId     String    @map("tenant_id") @db.VarChar(36)
+  dealId       String    @map("deal_id") @db.VarChar(36)
+  customerId   String?   @map("customer_id") @db.VarChar(36)
+  actorId      String?   @map("actor_id") @db.VarChar(36)
+  activityType String    @map("activity_type") @db.VarChar(30)
+  createdAt    DateTime  @default(now()) @map("created_at") @db.DateTime(6)
+  callLogs     CallLog[]
+  actor        User?     @relation(fields: [actorId], references: [id])
+  customer     Customer? @relation(fields: [customerId], references: [id])
+  deal         Deal      @relation(fields: [dealId], references: [id], onDelete: Cascade)
+  tenant       Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  notes        Note[]
+  tasks        Task[]
+
+  @@map("deal_activity")
+}
+
+model Note {
+  id             String        @id @default(uuid()) @db.VarChar(36)
+  tenantId       String?       @map("tenant_id") @db.VarChar(36)
+  leadActivityId String?       @map("lead_activity_id") @db.VarChar(36)
+  dealActivityId String?       @map("deal_activity_id") @db.VarChar(36)
+  title          String?       @db.VarChar(200)
+  content        String?
+  dealActivity   DealActivity? @relation(fields: [dealActivityId], references: [id], onDelete: Cascade)
+  leadActivity   LeadActivity? @relation(fields: [leadActivityId], references: [id], onDelete: Cascade)
+  tenant         Tenant?       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@map("note")
+}
+
+model Task {
+  id             String        @id @default(uuid()) @db.VarChar(36)
+  tenantId       String?       @map("tenant_id") @db.VarChar(36)
+  leadActivityId String?       @map("lead_activity_id") @db.VarChar(36)
+  dealActivityId String?       @map("deal_activity_id") @db.VarChar(36)
+  assignedUserId String?       @map("assigned_user_id") @db.VarChar(36)
+  title          String        @db.VarChar(200)
+  description    String?
+  startDate      DateTime?     @map("start_date") @db.Date
+  dueDate        DateTime?     @map("due_date") @db.Date
+  priority       String        @default("normal") @db.VarChar(20)
+  assignedUser   User?         @relation("UserAssignedTasks", fields: [assignedUserId], references: [id])
+  dealActivity   DealActivity? @relation(fields: [dealActivityId], references: [id], onDelete: Cascade)
+  leadActivity   LeadActivity? @relation(fields: [leadActivityId], references: [id], onDelete: Cascade)
+  tenant         Tenant?       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@map("task")
+}
+
+model CallLog {
+  id              String        @id @default(uuid()) @db.VarChar(36)
+  tenantId        String?       @map("tenant_id") @db.VarChar(36)
+  leadActivityId  String?       @map("lead_activity_id") @db.VarChar(36)
+  dealActivityId  String?       @map("deal_activity_id") @db.VarChar(36)
+  title           String?       @db.VarChar(200)
+  description     String?
+  startDate       DateTime?     @map("start_date") @db.DateTime(6)
+  dueDate         DateTime?     @map("due_date") @db.DateTime(6)
+  callingNumber   String?       @map("calling_number") @db.VarChar(30)
+  receivingNumber String?       @map("receiving_number") @db.VarChar(30)
+  duration        Int?
+  dealActivity    DealActivity? @relation(fields: [dealActivityId], references: [id], onDelete: Cascade)
+  leadActivity    LeadActivity? @relation(fields: [leadActivityId], references: [id], onDelete: Cascade)
+  tenant          Tenant?       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@map("call_log")
+}
+
+model ItemCategory {
+  id       String         @id @default(uuid()) @db.VarChar(36)
+  tenantId String         @map("tenant_id") @db.VarChar(36)
+  name     String         @db.VarChar(150)
+  parentId String?        @map("parent_id") @db.VarChar(36)
+  items    Item[]
+  parent   ItemCategory?  @relation("CategoryToCategory", fields: [parentId], references: [id])
+  children ItemCategory[] @relation("CategoryToCategory")
+  tenant   Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@map("item_category")
+}
+
+model Item {
+  id         String        @id @default(uuid()) @db.VarChar(36)
+  tenantId   String        @map("tenant_id") @db.VarChar(36)
+  categoryId String?       @map("category_id") @db.VarChar(36)
+  name       String        @db.VarChar(150)
+  sku        String?       @unique @db.VarChar(80)
+  unit       String?       @db.VarChar(30)
+  basePrice  Decimal?      @map("base_price") @db.Decimal(14, 2)
+  currency   String        @default("USD") @db.VarChar(3)
+  color      String?       @db.VarChar(7)
+  attributes Json?
+  createdAt  DateTime      @default(now()) @map("created_at") @db.DateTime(6)
+  entries    Entry[]
+  category   ItemCategory? @relation(fields: [categoryId], references: [id])
+  tenant     Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  leadItems  LeadItem[]
+  records    Record[]
+
+  @@map("item")
+}
+
+model Location {
+  id          String          @id @default(uuid()) @db.VarChar(36)
+  tenantId    String          @map("tenant_id") @db.VarChar(36)
+  name        String          @db.VarChar(150)
+  description String?
+  metadata    Json?
+  createdAt   DateTime        @default(now()) @map("created_at") @db.DateTime(6)
+  slots       InventorySlot[]
+  tenant      Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  records     Record[]
+  leads       Lead[]
+  viewings    Viewing[]
+
+  @@map("location")
+}
+
+model InventorySlot {
+  id          String          @id @default(uuid()) @db.VarChar(36)
+  tenantId    String          @map("tenant_id") @db.VarChar(36)
+  locationId  String          @map("location_id") @db.VarChar(36)
+  parentId    String?         @map("parent_id") @db.VarChar(36)
+  label       String          @db.VarChar(50)
+  status      String          @default("available") @db.VarChar(20)
+  metadata    Json?
+  entries     Entry[]
+  gridConfig  GridConfig?
+  location    Location        @relation(fields: [locationId], references: [id], onDelete: Cascade)
+  parent      InventorySlot?  @relation("SlotToSlot", fields: [parentId], references: [id])
+  children    InventorySlot[] @relation("SlotToSlot")
+  tenant      Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  leadItems   LeadItem[]
+  recordsFrom Record[]        @relation("RecordFromSlot")
+  records     Record[]        @relation("RecordSlot")
+  recordsTo   Record[]        @relation("RecordToSlot")
+  viewings    Viewing[]
+
+  @@map("inventory_slot")
+}
+
+model GridConfig {
+  id       String        @id @default(uuid()) @db.VarChar(36)
+  tenantId String?       @map("tenant_id") @db.VarChar(36)
+  slotId   String        @unique @map("slot_id") @db.VarChar(36)
+  gridRow  Int           @map("grid_row")
+  gridCol  Int           @map("grid_col")
+  rowLabel String?       @map("row_label") @db.VarChar(20)
+  colLabel String?       @map("col_label") @db.VarChar(20)
+  slot     InventorySlot @relation(fields: [slotId], references: [id], onDelete: Cascade)
+  tenant   Tenant?       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([slotId, gridRow, gridCol])
+  @@map("grid_config")
+}
+
+model Entry {
+  id               String        @id @default(uuid()) @db.VarChar(36)
+  tenantId         String?       @map("tenant_id") @db.VarChar(36)
+  slotId           String        @map("slot_id") @db.VarChar(36)
+  itemId           String        @map("item_id") @db.VarChar(36)
+  quantity         Int           @default(0)
+  reservedQuantity Int           @default(0) @map("reserved_quantity")
+  entryType        String        @default("stock") @map("entry_type") @db.VarChar(20)
+  validFrom        DateTime      @default(now()) @map("valid_from") @db.DateTime(6)
+  validUntil       DateTime?     @map("valid_until") @db.DateTime(6)
+  item             Item          @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  slot             InventorySlot @relation(fields: [slotId], references: [id], onDelete: Cascade)
+  tenant           Tenant?       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  records          Record[]
+
+  @@unique([slotId, itemId])
+  @@map("entry")
+}
+
+model Operation {
+  id            String   @id @default(uuid()) @db.VarChar(36)
+  tenantId      String   @map("tenant_id") @db.VarChar(36)
+  userId        String?  @map("user_id") @db.VarChar(36)
+  operationType String   @map("operation_type") @db.VarChar(30)
+  notes         String?
+  createdAt     DateTime @default(now()) @map("created_at") @db.DateTime(6)
+  tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user          User?    @relation(fields: [userId], references: [id])
+  records       Record[]
+
+  @@map("operation")
+}
+
+model Record {
+  id             String         @id @default(uuid()) @db.VarChar(36)
+  tenantId       String?        @map("tenant_id") @db.VarChar(36)
+  entryId        String         @map("entry_id") @db.VarChar(36)
+  dealId         String?        @map("deal_id") @db.VarChar(36)
+  operationId    String?        @map("operation_id") @db.VarChar(36)
+  locationId     String         @map("location_id") @db.VarChar(36)
+  slotId         String         @map("slot_id") @db.VarChar(36)
+  itemId         String         @map("item_id") @db.VarChar(36)
+  quantityDelta  Int            @map("quantity_delta")
+  quantityBefore Int            @map("quantity_before")
+  quantityAfter  Int            @map("quantity_after")
+  fromSlotId     String?        @map("from_slot_id") @db.VarChar(36)
+  toSlotId       String?        @map("to_slot_id") @db.VarChar(36)
+  unitPrice      Decimal?       @map("unit_price") @db.Decimal(14, 2)
+  snapshotData   Json?          @map("snapshot_data")
+  createdAt      DateTime       @default(now()) @map("created_at") @db.DateTime(6)
+  deal           Deal?          @relation(fields: [dealId], references: [id])
+  entry          Entry          @relation(fields: [entryId], references: [id], onDelete: Cascade)
+  fromSlot       InventorySlot? @relation("RecordFromSlot", fields: [fromSlotId], references: [id])
+  item           Item           @relation(fields: [itemId], references: [id])
+  location       Location       @relation(fields: [locationId], references: [id])
+  operation      Operation?     @relation(fields: [operationId], references: [id])
+  slot           InventorySlot  @relation("RecordSlot", fields: [slotId], references: [id])
+  toSlot         InventorySlot? @relation("RecordToSlot", fields: [toSlotId], references: [id])
+  tenant         Tenant?        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@map("record")
+}
+
+model Viewing {
+  id          String         @id @default(uuid()) @db.VarChar(36)
+  tenantId    String         @map("tenant_id") @db.VarChar(36)
+  slotId      String?        @map("slot_id") @db.VarChar(36)
+  leadId      String?        @map("lead_id") @db.VarChar(36)
+  locationId  String?        @map("location_id") @db.VarChar(36)
+  statusId    String?        @map("status_id") @db.VarChar(36)
+  sourceId    String?        @map("source_id") @db.VarChar(36)
+  name        String?        @db.VarChar(150)
+  email       String?        @db.VarChar(255)
+  scheduledAt DateTime       @map("scheduled_at") @db.DateTime(6)
+  actorId     String?        @map("actor_id") @db.VarChar(36)
+  notes       String?
+  createdAt   DateTime       @default(now()) @map("created_at") @db.DateTime(6)
+  actor       User?          @relation("ActorViewings", fields: [actorId], references: [id])
+  lead        Lead?          @relation(fields: [leadId], references: [id])
+  slot        InventorySlot? @relation(fields: [slotId], references: [id], onDelete: Cascade)
+  tenant      Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  status      Status?        @relation(fields: [statusId], references: [id])
+  location    Location?      @relation(fields: [locationId], references: [id])
+  source      Source?        @relation(fields: [sourceId], references: [id])
+  attachments Attachment[]
+
+  @@map("viewing")
+}
+
+model Attachment {
+  id        String   @id @default(uuid()) @db.VarChar(36)
+  tenantId  String   @map("tenant_id") @db.VarChar(36)
+  leadId    String?  @map("lead_id") @db.VarChar(36)
+  dealId    String?  @map("deal_id") @db.VarChar(36)
+  fileName  String   @map("file_name")
+  fileUrl   String   @map("file_url")
+  fileType  String?  @map("file_type")
+  fileSize  Int?     @map("file_size")
+  createdAt DateTime @default(now()) @map("created_at") @db.DateTime(6)
+  deal      Deal?    @relation(fields: [dealId], references: [id])
+  lead      Lead?    @relation(fields: [leadId], references: [id])
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  Viewing   Viewing? @relation(fields: [viewingId], references: [id])
+  viewingId String?  @db.VarChar(36)
+
+  @@map("attachment")
+}
+
+model AuditLog {
+  id         String   @id @default(uuid()) @db.VarChar(36)
+  tenantId   String   @map("tenant_id") @db.VarChar(36)
+  entityId   String   @map("entity_id") @db.VarChar(36)
+  entityType String   @map("entity_type") @db.VarChar(50)
+  actorId    String?  @map("actor_id") @db.VarChar(36)
+  action     String   @db.VarChar(50)
+  changes    Json?
+  createdAt  DateTime @default(now()) @map("created_at") @db.DateTime(6)
+  actor      User?    @relation(fields: [actorId], references: [id])
+  tenant     Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([entityId, entityType])
+  @@map("audit_log")
+}
+
+model Source {
+  id        String    @id @default(uuid()) @db.VarChar(36)
+  tenantId  String    @map("tenant_id") @db.VarChar(36)
+  name      String    @db.VarChar(50)
+  createdAt DateTime  @default(now()) @map("created_at") @db.DateTime(6)
+  tenant    Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  type      String    @default("lead") @db.VarChar(50)
+  color     String?   @db.VarChar(7)
+  leads     Lead[]
+  viewings  Viewing[]
+  Deal      Deal[]
+
+  @@map("source")
+}
