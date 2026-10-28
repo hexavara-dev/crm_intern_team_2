@@ -89,10 +89,14 @@ model Stage {
   entityType      String  @default("lead") @map("entity_type") @db.VarChar(10)
   isTerminalStage Boolean @default(false) @map("is_terminal")
   isDefaultStage  Boolean @default(false) @map("is_default")
+  terminalGuard   String? @map("terminal_guard") @db.VarChar(10)
+  defaultGuard    String? @map("default_guard") @db.VarChar(10)
   deals           Deal[]
   leads           Lead[]
   tenant          Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
+  @@unique([tenantId, terminalGuard])
+  @@unique([tenantId, defaultGuard])
   @@map("stage")
 }
 
@@ -107,11 +111,15 @@ model Status {
   isClosingStatus Boolean   @default(false) @map("is_closing_status")
   isFailedStatus  Boolean   @default(false) @map("is_failed_status")
   isSystemStatus  Boolean   @default(false) @map("is_system_status")
+  defaultGuard    String?   @map("default_guard") @db.VarChar(10)
+  closingGuard    String?   @map("closing_guard") @db.VarChar(10)
   deals           Deal[]
   leads           Lead[]
   viewings        Viewing[]
   tenant          Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
+  @@unique([tenantId, defaultGuard])
+  @@unique([tenantId, closingGuard])
   @@map("status")
 }
 

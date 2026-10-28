@@ -1,16 +1,25 @@
 import type { Request, Response } from 'express';
 import { ViewingUseCase } from '../../usecases/viewing/ViewingUseCase.js';
 import { extractFilters } from '../../infrastructure/utils/QueryHelper.js';
+import { respondWithError } from '../../infrastructure/utils/HttpErrorMapper.js';
+import { parsePagination } from '../../infrastructure/utils/RequestValidation.js';
+import {
+  validateViewingCreate,
+  validateViewingFailure,
+  validateViewingUpdate,
+} from '../validation/CrmRequestValidation.js';
 
 export class ViewingController {
   constructor(private viewingUseCase: ViewingUseCase) {}
 
   async create(req: Request, res: Response) {
     try {
-      const data = await this.viewingUseCase.createViewing(req.body);
+      const tenantId = (req as any).user?.tenantId;
+      const body = validateViewingCreate(req.body);
+      const data = await this.viewingUseCase.createViewing({ ...body, tenantId } as any);
       res.status(201).json(data);
     } catch (error: any) {
-      res.status(400).json({ error: error.message });
+      return respondWithError(res, error);
     }
   }
 
@@ -20,38 +29,39 @@ export class ViewingController {
       const data = await this.viewingUseCase.getViewing(req.params.id as string, tenantId);
       res.json(data);
     } catch (error: any) {
-      res.status(404).json({ error: error.message });
+      return respondWithError(res, error);
     }
   }
 
   async getAll(req: Request, res: Response) {
     try {
       const { tenantId } = (req as any).user;
-      const { page, limit } = req.query;
+      const { page, limit } = parsePagination(req.query as Record<string, unknown>);
       const filters = extractFilters(req.query);
       const data = await this.viewingUseCase.getAllViewings(
         tenantId,
-        Number(page) || 1,
-        Number(limit) || 10,
+        page,
+        limit,
         filters
       );
       res.json(data);
     } catch (error: any) {
-      res.status(400).json({ error: error.message });
+      return respondWithError(res, error);
     }
   }
 
   async update(req: Request, res: Response) {
     try {
       const { tenantId } = (req as any).user;
+      const body = validateViewingUpdate(req.body);
       const data = await this.viewingUseCase.updateViewing(
         req.params.id as string,
         tenantId,
-        req.body
+        body as any
       );
       res.json(data);
     } catch (error: any) {
-      res.status(400).json({ error: error.message });
+      return respondWithError(res, error);
     }
   }
 
@@ -61,7 +71,7 @@ export class ViewingController {
       await this.viewingUseCase.deleteViewing(req.params.id as string, tenantId);
       res.status(204).send();
     } catch (error: any) {
-      res.status(400).json({ error: error.message });
+      return respondWithError(res, error);
     }
   }
 
@@ -82,22 +92,22 @@ export class ViewingController {
       );
       res.json(result);
     } catch (error: any) {
-      res.status(400).json({ error: error.message });
+      return respondWithError(res, error);
     }
   }
 
   async fail(req: Request, res: Response) {
     try {
       const { tenantId } = (req as any).user;
-      const { reason } = req.body;
+      const { reason } = validateViewingFailure(req.body);
       const result = await this.viewingUseCase.failViewing(
         req.params.id as string,
         tenantId,
-        reason
+        reason as string
       );
       res.json(result);
     } catch (error: any) {
-      res.status(400).json({ error: error.message });
+      return respondWithError(res, error);
     }
   }
 }

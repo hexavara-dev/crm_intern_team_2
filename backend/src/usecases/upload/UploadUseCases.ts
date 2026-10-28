@@ -6,7 +6,10 @@ import type { Attachment, Prisma } from '@prisma/client';
 export class UploadUseCases {
   constructor(
     private customerRepo: IRepository<any>,
-    private attachmentRepo?: PrismaGenericRepository<Attachment, Prisma.AttachmentDelegate>
+    private attachmentRepo?: PrismaGenericRepository<Attachment, Prisma.AttachmentDelegate>,
+    private leadRepo?: IRepository<any>,
+    private dealRepo?: IRepository<any>,
+    private storage: typeof localStorage = localStorage
   ) {}
 
   async uploadCustomerDocument(customerId: string, file: Express.Multer.File, tenantId: string) {
@@ -18,12 +21,26 @@ export class UploadUseCases {
     const fileName = `${Date.now()}.${fileExt}`;
     const filePath = `${tenantId}/${customerId}/${fileName}`;
 
-    await localStorage.upload(filePath, file.buffer);
-    const { publicUrl } = localStorage.getPublicUrl(filePath);
+    await this.storage.upload(filePath, file.buffer);
+    const { publicUrl } = this.storage.getPublicUrl(filePath);
 
-    await this.customerRepo.update(customerId, {
-      attachedDocument: publicUrl,
-    });
+    try {
+      await this.customerRepo.update(customerId, {
+        attachedDocument: publicUrl,
+      });
+    } catch (error) {
+      await this.storage.remove([filePath]);
+      throw error;
+    }
+
+    if (customer.attachedDocument && customer.attachedDocument !== publicUrl) {
+      try {
+        const oldFilePath = this.storage.getFilePathFromPublicUrl(customer.attachedDocument);
+        await this.storage.remove([oldFilePath]);
+      } catch (error) {
+        console.error('Failed to clean up previous customer document:', error);
+      }
+    }
 
     return {
       message: 'File uploaded successfully',
@@ -38,12 +55,21 @@ export class UploadUseCases {
     tenantId: string
   ) {
     if (!this.attachmentRepo) throw new Error('Attachment repository not initialized');
+    const entityRepo = entityType === 'lead' ? this.leadRepo : this.dealRepo;
+    if (!entityRepo) throw new Error('Entity repository not initialized');
+    const entity = await entityRepo.findOne({
+      id: entityId,
+      tenantId,
+      ...(entityType === 'lead' ? { isDeleted: false } : {}),
+    });
+    if (!entity) throw new Error(`${entityType === 'lead' ? 'Lead' : 'Deal'} not found`);
 
-    const fileName = `${Date.now()}_${file.originalname}`;
+    const safeOriginalName = file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_');
+    const fileName = `${Date.now()}_${safeOriginalName}`;
     const filePath = `${tenantId}/${entityType}/${entityId}/${fileName}`;
 
-    await localStorage.upload(filePath, file.buffer);
-    const { publicUrl } = localStorage.getPublicUrl(filePath);
+    await this.storage.upload(filePath, file.buffer);
+    const { publicUrl } = this.storage.getPublicUrl(filePath);
 
     const attachmentData: any = {
       tenant: { connect: { id: tenantId } },
@@ -59,11 +85,42 @@ export class UploadUseCases {
       attachmentData.deal = { connect: { id: entityId } };
     }
 
-    const attachment = await this.attachmentRepo.create(attachmentData);
+    let attachment: Attachment;
+    try {
+      attachment = await this.attachmentRepo.create(attachmentData);
+    } catch (error) {
+      await this.storage.remove([filePath]);
+      throw error;
+    }
 
     return {
       message: 'File uploaded successfully',
       attachment,
     };
+  }
+
+  async deleteAttachment(attachmentId: string, tenantId: string) {
+    if (!this.attachmentRepo) throw new Error('Attachment repository not initialized');
+    const attachment = await this.attachmentRepo.findOne({ id: attachmentId, tenantId });
+    if (!attachment) throw new Error('Attachment not found');
+
+    const filePath = this.storage.getFilePathFromPublicUrl(attachment.fileUrl);
+    const backup = await this.storage.read(filePath);
+    await this.storage.removeStrict(filePath);
+
+    try {
+      await this.attachmentRepo.delete(attachmentId);
+    } catch (error) {
+      if (backup) {
+        try {
+          await this.storage.upload(filePath, backup);
+        } catch (restoreError) {
+          console.error('Failed to restore attachment after database delete failure:', restoreError);
+        }
+      }
+      throw error;
+    }
+
+    return { message: 'Attachment deleted successfully' };
   }
 }

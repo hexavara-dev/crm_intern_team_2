@@ -6,7 +6,7 @@ class MockLeadRepository implements IRepository<any> {
 
   async create(data: any) {
     const id = 'mock-' + Math.random().toString(36).substr(2, 9);
-    const newRecord = { id, ...data };
+    const newRecord = { id, isDeleted: false, ...data };
     this.db[id] = newRecord;
     return newRecord;
   }
@@ -39,6 +39,10 @@ class MockLeadRepository implements IRepository<any> {
   async findAll(include?: any, where?: any) {
     return Object.values(this.db);
   }
+
+  async count() {
+    return Object.keys(this.db).length;
+  }
 }
 
 describe('LeadUseCases', () => {
@@ -66,8 +70,8 @@ describe('LeadUseCases', () => {
   });
 
   it('should get a lead by id', async () => {
-    const created = await mockRepo.create({ data: 'test' });
-    const lead = await leadUseCases.getLead(created.id);
+    const created = await mockRepo.create({ data: 'test', tenantId: 'tenant-1' });
+    const lead = await leadUseCases.getLead(created.id, 'tenant-1');
     expect(lead).toBeDefined();
   });
 
@@ -75,7 +79,7 @@ describe('LeadUseCases', () => {
     await mockRepo.create({ name: 'Lead 1' });
     await mockRepo.create({ name: 'Lead 2' });
 
-    const leads = await leadUseCases.getAllLeads();
-    expect(leads).toHaveLength(2);
+    const leads = await leadUseCases.getAllLeads('tenant-1');
+    expect(leads.data).toHaveLength(2);
   });
 });

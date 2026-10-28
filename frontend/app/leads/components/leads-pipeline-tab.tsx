@@ -242,7 +242,7 @@ export function LeadsPipelineTab() {
   const router = useRouter();
   const { user } = useAuth();
   const { setOpen, setOpenMobile } = useSidebar();
-  const { leads, setLeadStage, deleteLead } = useLeads();
+  const { leads, setLeadStage, deleteLead } = useLeads({ getAll: true });
   const {
     stages,
     createStage,

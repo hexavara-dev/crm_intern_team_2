@@ -1,6 +1,6 @@
 import type { Request, Response } from 'express';
 import { UploadUseCases } from '../../usecases/upload/UploadUseCases.js';
-import { mapPrismaError } from '../../infrastructure/utils/PrismaErrorMapper.js';
+import { respondWithError } from '../../infrastructure/utils/HttpErrorMapper.js';
 
 export class UploadController {
   constructor(private uploadUseCases: UploadUseCases) {}
@@ -20,7 +20,7 @@ export class UploadController {
 
       return res.status(200).json(result);
     } catch (error: any) {
-      return res.status(400).json({ error: mapPrismaError(error) });
+      return respondWithError(res, error);
     }
   }
 
@@ -40,7 +40,21 @@ export class UploadController {
 
       return res.status(200).json(result);
     } catch (error: any) {
-      return res.status(400).json({ error: mapPrismaError(error) });
+      return respondWithError(res, error);
+    }
+  }
+
+  async deleteAttachment(req: Request, res: Response) {
+    try {
+      const tenantId = (req as any).user?.tenantId;
+      if (!tenantId) return res.status(401).json({ error: 'Tenant context missing' });
+      const result = await this.uploadUseCases.deleteAttachment(
+        req.params.id as string,
+        tenantId
+      );
+      return res.status(200).json(result);
+    } catch (error: any) {
+      return respondWithError(res, error);
     }
   }
 }

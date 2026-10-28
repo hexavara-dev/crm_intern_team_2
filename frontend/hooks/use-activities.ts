@@ -1,13 +1,10 @@
 import api from "@/lib/api";
 import { LeadActivity } from "@/types/activity";
-import { useAuth } from "@/components/auth/auth-provider";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
 export function useActivities() {
-  const { user } = useAuth();
   const queryClient = useQueryClient();
-  const tenantId = user?.tenantId;
 
   const leadActivitiesQuery = useQuery({
     queryKey: ["leadActivities"],
@@ -26,28 +23,14 @@ export function useActivities() {
       tasks?: { create: Record<string, unknown> };
       notes?: { create: Record<string, unknown> };
     }) => {
-      if (!tenantId) throw new Error("Not authenticated");
-      const payload: Record<string, unknown> = {
-        ...data,
-        tenant: { connect: { id: tenantId } },
-      };
-
       const isDealActivity = !!data.dealId;
       const endpoint = isDealActivity
         ? "/api/dealactivity"
         : "/api/leadactivity";
 
-      if (data.leadId) {
-        payload.lead = { connect: { id: data.leadId } };
-        delete payload.leadId;
-      }
-
-      if (data.dealId) {
-        payload.deal = { connect: { id: data.dealId } };
-        delete payload.dealId;
-      }
-
-      const response = await api.post<LeadActivity>(endpoint, payload);
+      // Send relation IDs as scalars. The backend supplies the authoritative
+      // tenantId from the JWT, avoiding a Prisma checked/unchecked input mix.
+      const response = await api.post<LeadActivity>(endpoint, data);
       return response.data;
     },
     onSuccess: (_, variables) => {

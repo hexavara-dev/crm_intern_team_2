@@ -1,0 +1,137 @@
+import type { IRepository } from '../src/domain/repositories/IRepository.js';
+import { DealUseCases } from '../src/usecases/deal/DealUseCases.js';
+import { jest } from '@jest/globals';
+
+class MockRepository implements IRepository<any> {
+  constructor(public items: any[] = []) {}
+
+  get delegate() {
+    return {
+      findUnique: async ({ where }: any) => this.findById(where.id),
+    };
+  }
+
+  async create(data: any) {
+    this.items.push(data);
+    return data;
+  }
+
+  async findById(id: string) {
+    return this.items.find((item) => item.id === id) ?? null;
+  }
+
+  async findOne(where: any) {
+    return (
+      this.items.find((item) =>
+        Object.entries(where).every(([key, value]) => item[key] === value)
+      ) ?? null
+    );
+  }
+
+  async update(id: string, data: any) {
+    const item = await this.findById(id);
+    if (!item) throw new Error('Not found');
+    Object.assign(item, data);
+    return item;
+  }
+
+  async delete(id: string) {
+    const item = await this.findById(id);
+    if (!item) throw new Error('Not found');
+    return item;
+  }
+
+  async findAll() {
+    return this.items;
+  }
+}
+
+describe('DealUseCases.updateDeal', () => {
+  it('moves a deal to another stage without resetting its amount', async () => {
+    const dealRepo = new MockRepository([
+      { id: 'deal-1', tenantId: 'tenant-1', stageId: 'stage-1', amount: 750000 },
+    ]);
+    const stageRepo = new MockRepository([
+      { id: 'stage-2', tenantId: 'tenant-1', entityType: 'deal' },
+    ]);
+    const useCases = new DealUseCases(
+      dealRepo,
+      undefined,
+      undefined,
+      undefined,
+      stageRepo
+    );
+
+    const result = await useCases.updateDeal(
+      'deal-1',
+      { stageId: 'stage-2' },
+      'tenant-1'
+    );
+
+    expect(result.stageId).toBe('stage-2');
+    expect(result.amount).toBe(750000);
+  });
+
+  it('rejects a stage owned by another tenant', async () => {
+    const dealRepo = new MockRepository([
+      { id: 'deal-1', tenantId: 'tenant-1', stageId: 'stage-1', amount: 750000 },
+    ]);
+    const stageRepo = new MockRepository([
+      { id: 'stage-2', tenantId: 'tenant-2', entityType: 'deal' },
+    ]);
+    const useCases = new DealUseCases(
+      dealRepo,
+      undefined,
+      undefined,
+      undefined,
+      stageRepo
+    );
+
+    await expect(
+      useCases.updateDeal('deal-1', { stageId: 'stage-2' }, 'tenant-1')
+    ).rejects.toThrow('Stage not found');
+  });
+});
+
+describe('DealUseCases.createDeal', () => {
+  it('creates the deal and its initial activity in one transaction', async () => {
+    const dealRepo = new MockRepository();
+    const activityRepo = new MockRepository();
+    const dealCreate = jest.fn().mockResolvedValue({
+      id: 'deal-1',
+      tenantId: 'tenant-1',
+      refCode: 'DEAL-001',
+    });
+    const activityCreate = jest.fn().mockResolvedValue({ id: 'activity-1' });
+    const transaction = jest.fn(async (callback: (tx: any) => Promise<any>) =>
+      callback({
+        deal: { create: dealCreate },
+        dealActivity: { create: activityCreate },
+      })
+    );
+    const useCases = new DealUseCases(
+      dealRepo,
+      activityRepo,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      { $transaction: transaction } as any
+    );
+
+    const result = await useCases.createDeal({
+      tenantId: 'tenant-1',
+      refCode: 'DEAL-001',
+      expectedAmount: 1000000,
+    });
+
+    expect(transaction).toHaveBeenCalledTimes(1);
+    expect(dealCreate).toHaveBeenCalledTimes(1);
+    expect(activityCreate).toHaveBeenCalledWith({
+      data: expect.objectContaining({ activityType: 'deal_created' }),
+    });
+    expect(result.id).toBe('deal-1');
+    expect(dealRepo.items).toHaveLength(0);
+    expect(activityRepo.items).toHaveLength(0);
+  });
+});

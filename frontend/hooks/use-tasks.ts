@@ -47,11 +47,8 @@ export function useTasks() {
       id: string;
       data: Record<string, unknown>;
     }) => {
-      const { assignedUserId, ...rest } = data;
-      const payload: Record<string, unknown> = { ...rest };
-      if (assignedUserId) {
-        payload.assignedUser = { connect: { id: String(assignedUserId) } };
-      }
+      const payload: Record<string, unknown> = { ...data };
+      if (!payload.assignedUserId) payload.assignedUserId = null;
       const response = await api.put<Task>(`/api/task/${id}`, {
         data: payload,
       });

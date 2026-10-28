@@ -15,9 +15,7 @@ import {
   SidebarProvider,
   SidebarTrigger,
 } from "@/components/ui/sidebar";
-import { useDeals } from "@/hooks/use-deals";
 import { useNotes } from "@/hooks/use-notes";
-import { useLeads } from "@/hooks/use-leads";
 import { Link2, Search, StickyNote, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
@@ -53,8 +51,6 @@ export default function NotesPage() {
     deleteNote,
     isLoading: isNotesLoading,
   } = useNotes();
-  const { leads, isLoading: isLeadsLoading } = useLeads();
-  const { deals, isLoading: isDealsLoading } = useDeals();
   const [searchQuery, setSearchQuery] = useState("");
   // const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   // const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
@@ -78,48 +74,6 @@ export default function NotesPage() {
 
   // const leadActivityMap = new Map(leadActivities?.data.map((a) => [a.id, a]));
   // const dealActivityMap = new Map(dealActivities?.data.map((a) => [a.id, a]));
-
-  const entityTypeOptions = [
-    { value: "lead", label: "Lead" },
-    { value: "deal", label: "Deal" },
-  ];
-
-  const getEntityOptions = (type: "lead" | "deal") => {
-    if (type === "lead") {
-      return leads.map((l) => ({
-        value: l.id,
-        label: `${l.customer.firstName} ${l.customer.lastName || ""}`.trim(),
-      }));
-    }
-    return deals.map((d) => ({
-      value: d.id,
-      label:
-        d.refCode ||
-        (d.lead?.customer
-          ? `${d.lead.customer.firstName} ${d.lead.customer.lastName || ""}`.trim()
-          : `Deal ${d.id.slice(0, 8)}`),
-    }));
-  };
-
-  const getEntityName = (entityType: string, entityId: string): string => {
-    if (entityType === "lead") {
-      const lead = leads.find((l) => l.id === entityId);
-      return lead
-        ? `${lead.customer.firstName} ${lead.customer.lastName || ""}`.trim()
-        : "Unknown Lead";
-    }
-    if (entityType === "deal") {
-      const deal = deals.find((d) => d.id === entityId);
-      if (!deal) return "Unknown Deal";
-      return (
-        deal.refCode ||
-        (deal.lead?.customer
-          ? `${deal.lead.customer.firstName} ${deal.lead.customer.lastName || ""}`.trim()
-          : `Deal ${deal.id.slice(0, 8)}`)
-      );
-    }
-    return "Unknown";
-  };
 
   // const displayNotes: DisplayNote[] | undefined = notes?.reduce<DisplayNote[]>(
   //   (acc, note) => {
@@ -331,7 +285,7 @@ export default function NotesPage() {
         </header>
 
         <div className="flex flex-1 flex-col gap-4 p-6">
-          {isNotesLoading || isLeadsLoading || isDealsLoading ? (
+          {isNotesLoading ? (
             <div className="text-sm text-muted-foreground text-center h-screen flex items-center justify-center">
               Loading notes...
             </div>

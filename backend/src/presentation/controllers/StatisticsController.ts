@@ -1,6 +1,6 @@
 import type { Request, Response } from 'express';
 import type { StatisticsUseCases } from '../../usecases/statistics/StatisticsUseCases.js';
-import { mapPrismaError } from '../../infrastructure/utils/PrismaErrorMapper.js';
+import { respondWithError } from '../../infrastructure/utils/HttpErrorMapper.js';
 
 export class StatisticsController {
   constructor(private statisticsUseCases: StatisticsUseCases) {}
@@ -29,8 +29,7 @@ export class StatisticsController {
       // 3. Return results
       return res.status(200).json(stats);
     } catch (error: any) {
-      console.error('Error in StatisticsController.getStatistics:', error);
-      return res.status(500).json({ error: mapPrismaError(error) });
+      return respondWithError(res, error);
     }
   }
 }

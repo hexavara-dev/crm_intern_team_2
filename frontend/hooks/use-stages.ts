@@ -28,6 +28,18 @@ export interface CreateStageData {
   tenantId?: string;
 }
 
+type StageApiResponse = Omit<Stage, "isTerminal"> & {
+  isTerminal?: boolean;
+  isTerminalStage?: boolean;
+};
+
+function normalizeStages(payload: unknown): Stage[] {
+  return normalizeCollection<StageApiResponse>(payload).map((stage) => ({
+    ...stage,
+    isTerminal: stage.isTerminal ?? stage.isTerminalStage ?? false,
+  }));
+}
+
 export function useStages(entityType: string = "deal") {
   const queryClient = useQueryClient();
 
@@ -43,8 +55,10 @@ export function useStages(entityType: string = "deal") {
 
   const createStageMutation = useMutation({
     mutationFn: async (data: CreateStageData) => {
+      const { isTerminal, ...stageData } = data;
       const payload = {
-        ...data,
+        ...stageData,
+        ...(isTerminal !== undefined && { isTerminalStage: isTerminal }),
         entityType,
         position: data.position || 0,
       };
@@ -69,7 +83,12 @@ export function useStages(entityType: string = "deal") {
       id: string;
       data: Partial<CreateStageData>;
     }) => {
-      const response = await api.put<Stage>(`/api/stage/${id}`, data);
+      const { isTerminal, ...stageData } = data;
+      const payload = {
+        ...stageData,
+        ...(isTerminal !== undefined && { isTerminalStage: isTerminal }),
+      };
+      const response = await api.put<Stage>(`/api/stage/${id}`, payload);
       return response.data;
     },
     onSuccess: () => {
@@ -112,7 +131,7 @@ export function useStages(entityType: string = "deal") {
   });
 
   return {
-    stages: normalizeCollection<Stage>(stagesQuery.data),
+    stages: normalizeStages(stagesQuery.data),
     isLoading: stagesQuery.isLoading,
     createStage: createStageMutation.mutateAsync,
     updateStage: updateStageMutation.mutateAsync,

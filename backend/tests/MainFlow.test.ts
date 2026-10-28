@@ -19,7 +19,12 @@ class MockRepository implements IRepository<any> {
   }
 
   async create(data: any) {
-    const item = { id: `id-${Math.random().toString(36).substr(2, 9)}`, ...data };
+    const item = {
+      id: `id-${Math.random().toString(36).substr(2, 9)}`,
+      isDeleted: false,
+      ...data,
+      tenantId: data.tenantId ?? data.tenant?.connect?.id,
+    };
     this.items.push(item);
     return item;
   }
@@ -67,6 +72,7 @@ describe('CRM Main Business Flow Integration Test (Mocked Persistence)', () => {
   let leadUseCases: LeadUseCases;
 
   beforeEach(() => {
+    process.env.JWT_SECRET = 'test-only-jwt-secret';
     userRepo = new MockRepository();
     tenantRepo = new MockRepository();
     leadRepo = new MockRepository();
@@ -106,13 +112,17 @@ describe('CRM Main Business Flow Integration Test (Mocked Persistence)', () => {
     const leadId = lead.id;
 
     // --- STEP 3: LEAD TO DEAL CONVERSION ---
-    const convertResult = await leadUseCases.convertLeadToDeal(leadId, {
-      expectedAmount: 50000,
-      currency: 'USD',
-    });
+    const convertResult = await leadUseCases.convertLeadToDeal(
+      leadId,
+      {
+        expectedAmount: 50000,
+        currency: 'USD',
+      },
+      tenantId
+    );
 
-    expect(convertResult.converted).toBe(true);
-    expect(convertResult.leadId).toBe(leadId);
+    expect(convertResult).toHaveProperty('id');
+    expect(convertResult.lead.connect.id).toBe(leadId);
 
     // Verify the lead state changed in our mock storage
     const updatedLead = await leadRepo.findById(leadId);
@@ -131,15 +141,15 @@ describe('CRM Main Business Flow Integration Test (Mocked Persistence)', () => {
   });
 
   it('should handle failed login attempts correctly', async () => {
-    await authUseCases.onboard('Test', 'test@test.com', 'pass');
+    await authUseCases.onboard('Test', 'test@test.com', 'password-123');
     await expect(authUseCases.login('test@test.com', 'wrong-pass')).rejects.toThrow(
       'Invalid email or password'
     );
   });
 
   it('should prevent creating a user with an existing email', async () => {
-    await authUseCases.onboard('Tenant 1', 'unique@email.com', 'pass');
-    await expect(authUseCases.onboard('Tenant 2', 'unique@email.com', 'other')).rejects.toThrow(
+    await authUseCases.onboard('Tenant 1', 'unique@email.com', 'password-123');
+    await expect(authUseCases.onboard('Tenant 2', 'unique@email.com', 'password-456')).rejects.toThrow(
       'Email already registered'
     );
   });

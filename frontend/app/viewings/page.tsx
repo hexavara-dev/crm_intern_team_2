@@ -30,6 +30,7 @@ import {
   SidebarTrigger,
 } from "@/components/ui/sidebar";
 import { useLeads } from "@/hooks/use-leads";
+import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { useLocations } from "@/hooks/use-locations";
 import { useSources } from "@/hooks/use-sources";
 import { useStatuses } from "@/hooks/use-statuses";
@@ -80,7 +81,17 @@ function buildDateParams(
 export default function ViewingsPage() {
   const { user } = useAuth();
   const { locations } = useLocations();
-  const { leads } = useLeads();
+  const [leadSearch, setLeadSearch] = useState("");
+  const debouncedLeadSearch = useDebouncedValue(leadSearch);
+  const { leads, isFetching: isSearchingLeads } = useLeads({
+    getAll: true,
+    useServerPagination: true,
+    page: 1,
+    limit: 20,
+    additionalParams: debouncedLeadSearch
+      ? { search: debouncedLeadSearch }
+      : undefined,
+  });
   const { users } = useUsers();
   const { sources: viewingSources } = useSources({
     additionalParams: { type: "viewing" },
@@ -151,13 +162,22 @@ export default function ViewingsPage() {
 
 
   const leadOptions = useMemo(
-    () =>
-      leads.map((lead) => ({
+    () => {
+      const options = leads.map((lead) => ({
         value: lead.id,
         label:
           `${lead.customer.firstName} ${lead.customer.lastName || ""}`.trim(),
-      })),
-    [leads],
+      }));
+      const selectedLead = selectedViewing?.lead;
+      if (selectedLead?.customer && !options.some((option) => option.value === selectedLead.id)) {
+        options.unshift({
+          value: selectedLead.id,
+          label: `${selectedLead.customer.firstName} ${selectedLead.customer.lastName || ""}`.trim(),
+        });
+      }
+      return options;
+    },
+    [leads, selectedViewing],
   );
 
   const salesOptions = useMemo(
@@ -352,7 +372,11 @@ export default function ViewingsPage() {
                       placeholder="Select lead"
                       options={leadOptions}
                       className="col-span-2"
-                      disabled={leadOptions.length === 0}
+                      searchable
+                      searchValue={leadSearch}
+                      searchPlaceholder="Search lead name, email, or phone..."
+                      onSearchChange={setLeadSearch}
+                      isLoading={isSearchingLeads}
                     />
                     <FormSelect
                       name="actorId"
@@ -548,7 +572,11 @@ export default function ViewingsPage() {
                   placeholder="Select lead"
                   options={leadOptions}
                   className="col-span-2"
-                  disabled={leadOptions.length === 0}
+                  searchable
+                  searchValue={leadSearch}
+                  searchPlaceholder="Search lead name, email, or phone..."
+                  onSearchChange={setLeadSearch}
+                  isLoading={isSearchingLeads}
                 />
               )}
               <FormSelect

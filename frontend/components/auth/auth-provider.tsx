@@ -2,12 +2,6 @@
 
 import React, { createContext, useContext, useEffect, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
-import {
-  getUser,
-  logout as clearCookies,
-  setUser,
-  setToken,
-} from "@/lib/cookies";
 import api from "@/lib/api";
 import {
   AuthUser,
@@ -24,7 +18,7 @@ interface AuthContextType {
   login: (credentials: LoginCredentials) => Promise<void>;
   onboard: (data: OnboardData) => Promise<void>;
   register: (data: RegisterData) => Promise<void>;
-  logout: () => void;
+  logout: () => Promise<void>;
   isLoading: boolean;
 }
 
@@ -38,17 +32,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const queryClient = useQueryClient();
 
   useEffect(() => {
-    const savedUser = getUser();
-    if (savedUser) {
+    const restoreSession = async () => {
+      // Remove legacy JavaScript-readable auth cookies. HttpOnly cookies cannot
+      // be read or removed by this code and remain managed by the backend.
+      document.cookie = "accessToken=; Max-Age=0; path=/";
+      document.cookie = "user=; Max-Age=0; path=/";
+
       try {
-        const parsed =
-          typeof savedUser === "string" ? JSON.parse(savedUser) : savedUser;
-        setInternalUser(parsed);
+        const response = await api.get<AuthUser>("/api/auth/me");
+        setInternalUser(response.data);
       } catch {
         setInternalUser(null);
+      } finally {
+        setIsLoading(false);
       }
-    }
-    setIsLoading(false);
+    };
+
+    void restoreSession();
   }, []);
 
   useEffect(() => {
@@ -73,8 +73,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return response.data;
     },
     onSuccess: (data) => {
-      setToken(data.token);
-      setUser(data.user);
       setInternalUser(data.user);
       toast.success("Login successful!");
 
@@ -108,8 +106,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return response.data;
     },
     onSuccess: (data) => {
-      setToken(data.token);
-      setUser(data.user);
       setInternalUser(data.user);
       toast.success("Account created successfully!");
       router.push("/leads");
@@ -147,10 +143,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await registerMutation.mutateAsync(data);
   };
 
-  const logout = () => {
-    clearCookies();
-    setInternalUser(null);
-    router.push("/login");
+  const logout = async () => {
+    try {
+      await api.post("/api/auth/logout");
+    } finally {
+      queryClient.clear();
+      setInternalUser(null);
+      router.push("/login");
+    }
   };
 
   return (

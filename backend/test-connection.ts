@@ -10,11 +10,12 @@ if (fs.existsSync('.env.local')) {
 
 async function main() {
   const connectionString = process.env.DATABASE_URL;
-  console.log('Testing connection to:', connectionString);
 
   if (!connectionString) {
     throw new Error('DATABASE_URL is not defined');
   }
+
+  console.log('Testing database connection...');
 
   // Parse the connection string manually
   const parsed = new URL(connectionString);
