@@ -1,4 +1,4 @@
-import type { Lead, Deal, LeadActivity, Status, Stage, Prisma } from '@prisma/client';
+import type { Lead, Deal, LeadActivity, Status, Stage, Prisma, PrismaClient } from '@prisma/client';
 import type { PrismaGenericRepository } from '../../infrastructure/repositories/PrismaGenericRepository.js';
 import type { CreateLeadDTO, UpdateLeadDTO } from '../../presentation/dtos/LeadDTO.js';
 
@@ -21,8 +21,55 @@ export class LeadUseCases {
     private statusRepository?: PrismaGenericRepository<Status, Prisma.StatusDelegate>,
     private stageRepository?: PrismaGenericRepository<Stage, Prisma.StageDelegate>,
     private customerRepository?: PrismaGenericRepository<any, any>,
-    private auditLogRepository?: PrismaGenericRepository<any, any>
+    private auditLogRepository?: PrismaGenericRepository<any, any>,
+    private prisma?: PrismaClient
   ) {}
+
+  private async validateRelations(
+    dto: CreateLeadDTO | UpdateLeadDTO,
+    tenantId: string
+  ) {
+    if (!this.prisma) return;
+
+    const [assignedUser, sourceUser, stage, status, source, location] = await Promise.all([
+      dto.assignedUserId
+        ? this.prisma.user.findFirst({ where: { id: dto.assignedUserId, tenantId }, select: { id: true } })
+        : undefined,
+      'sourceUserId' in dto && dto.sourceUserId
+        ? this.prisma.user.findFirst({ where: { id: dto.sourceUserId, tenantId }, select: { id: true } })
+        : undefined,
+      'stageId' in dto && dto.stageId
+        ? this.prisma.stage.findFirst({
+            where: { id: dto.stageId, tenantId, entityType: 'lead' },
+            select: { id: true },
+          })
+        : undefined,
+      dto.statusId
+        ? this.prisma.status.findFirst({
+            where: { id: dto.statusId, tenantId, type: 'lead' },
+            select: { id: true },
+          })
+        : undefined,
+      dto.sourceId
+        ? this.prisma.source.findFirst({
+            where: { id: dto.sourceId, tenantId, type: 'lead' },
+            select: { id: true },
+          })
+        : undefined,
+      dto.locationId
+        ? this.prisma.location.findFirst({ where: { id: dto.locationId, tenantId }, select: { id: true } })
+        : undefined,
+    ]);
+
+    if (dto.assignedUserId && !assignedUser) throw new Error('Assigned user not found');
+    if ('sourceUserId' in dto && dto.sourceUserId && !sourceUser) {
+      throw new Error('Source user not found');
+    }
+    if ('stageId' in dto && dto.stageId && !stage) throw new Error('Stage not found');
+    if (dto.statusId && !status) throw new Error('Status not found');
+    if (dto.sourceId && !source) throw new Error('Source not found');
+    if (dto.locationId && !location) throw new Error('Location not found');
+  }
 
   private async logAudit(params: {
     tenantId: string;
@@ -52,6 +99,8 @@ export class LeadUseCases {
     if (!dto.tenantId || !dto.firstName) {
       throw new Error('Missing required fields: tenantId or firstName');
     }
+
+    await this.validateRelations(dto, dto.tenantId);
 
     const data: any = {
       tenant: { connect: { id: dto.tenantId } },
@@ -108,8 +157,9 @@ export class LeadUseCases {
     return this.leadRepository.create(data);
   }
 
-  async getLead(id: string) {
-    const lead = await this.leadRepository.findById(id, {
+  async getLead(id: string, tenantId?: string) {
+    if (!tenantId) throw new Error('Tenant context missing');
+    const lead = await this.leadRepository.findOne({ id, tenantId, isDeleted: false }, {
       customer: {
         include: {
           organization: true,
@@ -149,12 +199,15 @@ export class LeadUseCases {
     return lead;
   }
 
-  async updateLead(id: string, dto: UpdateLeadDTO, role: string, currentUserId?: string) {
+  async updateLead(id: string, dto: UpdateLeadDTO, role: string, currentUserId?: string, tenantId?: string) {
     if (role !== 'owner') {
       delete dto.assignedUserId;
     }
 
-    const lead: any = await this.getLead(id);
+    const lead: any = await this.getLead(id, tenantId);
+
+    if (!tenantId) throw new Error('Tenant context missing');
+    await this.validateRelations(dto, tenantId);
 
     const updateData: any = {};
     const auditChanges: any = {};
@@ -245,14 +298,35 @@ export class LeadUseCases {
     return updatedLead;
   }
 
-  async deleteLead(id: string) {
+  async deleteLead(id: string, tenantId?: string) {
+    await this.getLead(id, tenantId);
     return this.leadRepository.update(id, { isDeleted: true });
   }
 
-  async getAllLeads(tenantId: string, page: number = 1, limit: number = 10, filters: any = {}) {
+  async getAllLeads(
+    tenantId: string,
+    page: number = 1,
+    limit: number = 10,
+    filters: any = {},
+    search?: string
+  ) {
     const skip = (page - 1) * limit;
     const take = limit;
-    const where = { tenantId, ...filters };
+    const where: Prisma.LeadWhereInput = {
+      ...filters,
+      tenantId,
+      isDeleted: false,
+      ...(search
+        ? {
+            OR: [
+              { customer: { is: { firstName: { contains: search } } } },
+              { customer: { is: { lastName: { contains: search } } } },
+              { customer: { is: { email: { contains: search } } } },
+              { customer: { is: { phoneNumber: { contains: search } } } },
+            ],
+          }
+        : {}),
+    };
 
     const [data, total] = await Promise.all([
       this.leadRepository.findAll({
@@ -306,20 +380,13 @@ export class LeadUseCases {
     };
   }
 
-  async convertLeadToDeal(id: string, dealData: any) {
-    const lead = await this.getLead(id);
+  async convertLeadToDeal(id: string, dealData: any, tenantId?: string) {
+    const lead = await this.getLead(id, tenantId);
 
     if (lead.converted) {
       throw new Error('Lead already converted');
     }
 
-    // 1. Mark lead as converted
-    await this.leadRepository.update(id, {
-      converted: true,
-      convertedDate: new Date(),
-    });
-
-    // 2. Create the deal
     const dealPayload = {
       tenant: { connect: { id: lead.tenantId } },
       lead: { connect: { id: lead.id } },
@@ -329,6 +396,36 @@ export class LeadUseCases {
       refCode: `DEAL-${Date.now()}`,
       closingDate: new Date(),
     };
+
+    if (this.prisma) {
+      return this.prisma.$transaction(async (tx) => {
+        const updated = await tx.lead.updateMany({
+          where: { id, tenantId: lead.tenantId, converted: false, isDeleted: false },
+          data: { converted: true, convertedDate: new Date() },
+        });
+        if (updated.count !== 1) throw new Error('Lead already converted');
+
+        const deal = await tx.deal.create({ data: dealPayload });
+
+        if (this.leadActivityRepository) {
+          await tx.leadActivity.create({
+            data: {
+              tenant: { connect: { id: lead.tenantId } },
+              lead: { connect: { id: lead.id } },
+              activityType: 'conversion',
+              notes: { create: { content: `Lead converted to deal: ${deal.refCode}` } },
+            },
+          });
+        }
+
+        return deal;
+      });
+    }
+
+    await this.leadRepository.update(id, {
+      converted: true,
+      convertedDate: new Date(),
+    });
 
     const deal = await this.dealRepository.create(dealPayload);
 
@@ -365,6 +462,8 @@ export class LeadUseCases {
       );
     }
 
+    await this.getLead(id, tenantId);
+
     return this.leadRepository.update(id, {
       statusId: status.id,
     });
@@ -385,6 +484,8 @@ export class LeadUseCases {
         `Stage "${stageName}" not found in your organization. Please create it first in the Stages configuration.`
       );
     }
+
+    await this.getLead(id, tenantId);
 
     return this.leadRepository.update(id, {
       stageId: stage.id,
@@ -417,7 +518,8 @@ export class LeadUseCases {
       throw new Error('Lead activity repository not initialized');
     }
 
-    const lead = await this.getLead(leadId);
+    const lead = await this.leadRepository.findById(leadId);
+    if (!lead) throw new Error('Lead not found');
 
     const activityData: any = {
       tenant: { connect: { id: lead.tenantId } },

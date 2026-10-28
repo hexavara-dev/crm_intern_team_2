@@ -197,11 +197,19 @@ export function AttachmentsTab({
                   </TableCell>
                   <TableCell className="text-right">
                     <Button
+                      asChild
                       variant="ghost"
                       size="icon"
                       className="size-8 opacity-0 group-hover:opacity-100 transition-opacity"
                     >
-                      <Download className="size-3.5" />
+                      <a
+                        href={attachment.fileUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        aria-label={`Download ${attachment.name}`}
+                      >
+                        <Download className="size-3.5" />
+                      </a>
                     </Button>
                   </TableCell>
                 </TableRow>

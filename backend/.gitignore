@@ -1,6 +1,21 @@
 node_modules
+dist
+.seed-dist
+/uploads/
 # Keep environment variables out of version control
 .env
 .env.local 
 .env.prod
 /generated/prisma
+prisma.config.js
+prisma.config.js.map
+prisma.config.d.ts
+prisma.config.d.ts.map
+test-connection.js
+test-connection.js.map
+test-connection.d.ts
+test-connection.d.ts.map
+tests/**/*.js
+tests/**/*.js.map
+tests/**/*.d.ts
+tests/**/*.d.ts.map

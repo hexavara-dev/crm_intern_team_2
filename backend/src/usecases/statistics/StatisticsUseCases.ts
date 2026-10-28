@@ -35,7 +35,7 @@ export class StatisticsUseCases {
 
     // 1. Total Leads
     const totalLeads = await this.prisma.lead.count({
-      where: { tenantId, ...dateFilter },
+      where: { tenantId, isDeleted: false, ...dateFilter },
     });
 
     // 2. Ongoing Deals
@@ -71,6 +71,7 @@ export class StatisticsUseCases {
     const convertedLeads = await this.prisma.lead.findMany({
       where: {
         tenantId,
+        isDeleted: false,
         converted: true,
         convertedDate: { not: null },
         ...dateFilter,
@@ -184,7 +185,7 @@ export class StatisticsUseCases {
 
     // 10. Recent Leads
     const recentLeads = await this.prisma.lead.findMany({
-      where: { tenantId, ...dateFilter },
+      where: { tenantId, isDeleted: false, ...dateFilter },
       orderBy: { createdAt: 'desc' },
       take: 5,
       include: {

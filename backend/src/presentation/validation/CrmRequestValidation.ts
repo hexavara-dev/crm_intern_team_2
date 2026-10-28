@@ -1,0 +1,173 @@
+import { validateBody, type FieldRule } from '../../infrastructure/utils/RequestValidation.js';
+
+const id = (nullable = false): FieldRule => ({
+  type: 'string',
+  max: 36,
+  allowEmpty: true,
+  nullable,
+});
+const text = (max: number, nullable = false): FieldRule => ({ type: 'string', max, nullable });
+const optionalText = (max: number, nullable = false): FieldRule => ({
+  type: 'string',
+  max,
+  allowEmpty: true,
+  nullable,
+});
+
+const leadCreateRules: Record<string, FieldRule> = {
+  firstName: { ...text(100), required: true },
+  lastName: optionalText(100),
+  email: optionalText(255),
+  phone: optionalText(30),
+  company: optionalText(150),
+  statusId: id(),
+  sourceId: id(),
+  sourceUserId: id(),
+  assignedUserId: id(),
+  notes: optionalText(10000),
+  type: optionalText(50),
+  gender: optionalText(20),
+  salutation: optionalText(20),
+  organizationName: optionalText(150),
+  organizationLocation: optionalText(500),
+  location: optionalText(500),
+  locationId: id(),
+  source: optionalText(50),
+};
+
+const leadUpdateRules: Record<string, FieldRule> = {
+  assignedUserId: id(),
+  stageId: id(),
+  statusId: id(),
+  locationId: id(),
+  statusName: optionalText(100),
+  type: optionalText(50),
+  converted: { type: 'boolean' },
+  convertedDate: { type: 'date', nullable: true },
+  firstName: optionalText(100),
+  lastName: optionalText(100),
+  email: optionalText(255),
+  phone: optionalText(30),
+  gender: optionalText(20),
+  salutation: optionalText(20),
+  location: optionalText(500),
+  sourceId: id(),
+  organizationName: optionalText(150),
+  organizationLocation: optionalText(500),
+};
+
+const dealRules: Record<string, FieldRule> = {
+  leadId: id(true),
+  assignedUserId: id(true),
+  stageId: id(true),
+  statusId: id(true),
+  refCode: optionalText(80),
+  dealType: optionalText(50, true),
+  expectedAmount: { type: 'number', min: 0, nullable: true },
+  amount: { type: 'number', min: 0, nullable: true },
+  currency: { type: 'string', min: 3, max: 3 },
+  expectedClosingDate: { type: 'date', nullable: true },
+  closingDate: { type: 'date', nullable: true },
+  lostReason: optionalText(500, true),
+  lostNotes: optionalText(10000, true),
+};
+
+const viewingRules: Record<string, FieldRule> = {
+  slotId: id(true),
+  leadId: id(true),
+  locationId: id(true),
+  sourceId: id(true),
+  statusId: id(true),
+  actorId: id(true),
+  name: optionalText(150, true),
+  email: optionalText(255, true),
+  scheduledAt: { type: 'date', nullable: false },
+  notes: optionalText(10000, true),
+};
+
+const stageRules: Record<string, FieldRule> = {
+  name: text(100),
+  position: { type: 'number', integer: true, min: 0 },
+  color: optionalText(50),
+  entityType: { type: 'string', values: ['lead', 'deal'] },
+  isTerminalStage: { type: 'boolean' },
+  isDefaultStage: { type: 'boolean' },
+};
+
+const statusRules: Record<string, FieldRule> = {
+  name: text(100),
+  priority: { type: 'number', integer: true, min: 0 },
+  color: optionalText(7),
+  type: { type: 'string', values: ['lead', 'deal', 'viewing'] },
+  isDefaultStatus: { type: 'boolean' },
+  isClosingStatus: { type: 'boolean' },
+};
+
+const taskRules: Record<string, FieldRule> = {
+  title: text(200),
+  description: optionalText(10000, true),
+  startDate: { type: 'date', nullable: true },
+  dueDate: { type: 'date', nullable: true },
+  priority: { type: 'string', values: ['low', 'normal', 'high', 'urgent'] },
+  assignedUserId: id(true),
+  leadActivityId: id(true),
+  dealActivityId: id(true),
+};
+
+const noteRules: Record<string, FieldRule> = {
+  title: optionalText(200, true),
+  content: text(10000),
+  leadActivityId: id(true),
+  dealActivityId: id(true),
+};
+
+const accountUpdateRules: Record<string, FieldRule> = {
+  userId: { ...id(), required: true },
+  name: optionalText(150),
+  role: { type: 'string', values: ['owner', 'member'] },
+  password: { type: 'string', min: 8, max: 128 },
+};
+
+const options = { allowUnknown: ['tenantId'] as const };
+
+export const validateLeadCreate = (body: unknown) =>
+  validateBody(body, leadCreateRules, options);
+export const validateLeadUpdate = (body: unknown) =>
+  validateBody(body, leadUpdateRules, { ...options, partial: true });
+export const validateDealCreate = (body: unknown) => validateBody(body, dealRules, options);
+export const validateDealUpdate = (body: unknown) =>
+  validateBody(body, dealRules, { ...options, partial: true });
+export const validateViewingCreate = (body: unknown) =>
+  validateBody(body, { ...viewingRules, scheduledAt: { type: 'date', required: true } }, options);
+export const validateViewingUpdate = (body: unknown) =>
+  validateBody(body, viewingRules, { ...options, partial: true });
+export const validateStageCreate = (body: unknown) =>
+  validateBody(body, { ...stageRules, name: { ...stageRules.name!, required: true } }, options);
+export const validateStageUpdate = (body: unknown) =>
+  validateBody(body, stageRules, { ...options, partial: true });
+export const validateStatusCreate = (body: unknown) =>
+  validateBody(body, { ...statusRules, name: { ...statusRules.name!, required: true } }, options);
+export const validateStatusUpdate = (body: unknown) =>
+  validateBody(body, statusRules, { ...options, partial: true });
+export const validateTaskCreate = (body: unknown) =>
+  validateBody(body, { ...taskRules, title: { ...taskRules.title!, required: true } });
+export const validateTaskUpdate = (body: unknown) =>
+  validateBody(body, taskRules, { partial: true });
+export const validateNoteCreate = (body: unknown) =>
+  validateBody(body, { ...noteRules, content: { ...noteRules.content!, required: true } });
+export const validateNoteUpdate = (body: unknown) =>
+  validateBody(body, noteRules, { partial: true });
+export const validateAccountUpdate = (body: unknown) =>
+  validateBody(body, accountUpdateRules);
+
+export const validateLeadConversion = (body: unknown) =>
+  validateBody(body, {
+    expectedAmount: { type: 'number', min: 0 },
+    currency: { type: 'string', min: 3, max: 3 },
+  });
+
+export const validateRequiredName = (body: unknown, field: 'statusName' | 'stageName') =>
+  validateBody(body, { [field]: { type: 'string', required: true, max: 100 } });
+
+export const validateViewingFailure = (body: unknown) =>
+  validateBody(body, { reason: { type: 'string', required: true, max: 1000 } });

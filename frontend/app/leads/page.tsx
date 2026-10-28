@@ -35,7 +35,7 @@ import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { FormProvider, useForm } from "react-hook-form";
 import { Badge } from "@/components/ui/badge";
-import { getUser } from "@/lib/cookies";
+import { useAuth } from "@/components/auth/auth-provider";
 import Typography from "@/components/Typography";
 import { useUsers } from "@/hooks/use-users";
 import { useSources } from "@/hooks/use-sources";
@@ -52,7 +52,7 @@ export default function LeadsPage() {
     isConverting,
     serverPagination,
   } = useLeadsTable();
-  const user = getUser();
+  const { user } = useAuth();
 
   const { statuses } = useStatuses({
     additionalParams: {
@@ -255,7 +255,10 @@ export default function LeadsPage() {
         ...data,
         sourceUserId: user?.id,
         location: getLocationNameById(data.locationId),
-        assignedUserId: user?.role === "owner" ? user?.id : undefined,
+        assignedUserId:
+          user?.role === "owner"
+            ? data.assignedUserId || user.id
+            : user?.id,
       });
       addForm.reset();
       setIsAddDialogOpen(false);

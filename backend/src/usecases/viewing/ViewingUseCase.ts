@@ -11,10 +11,60 @@ export class ViewingUseCase {
     private prisma: PrismaClient
   ) {}
 
+  private async validateRelations(
+    dto: CreateViewingDTO | UpdateViewingDTO,
+    tenantId: string
+  ) {
+    const [slot, lead, location, source, actor, status] = await Promise.all([
+      dto.slotId
+        ? this.prisma.inventorySlot.findFirst({
+            where: { id: dto.slotId, tenantId },
+            select: { id: true },
+          })
+        : undefined,
+      dto.leadId
+        ? this.prisma.lead.findFirst({
+            where: { id: dto.leadId, tenantId, isDeleted: false },
+            select: { id: true },
+          })
+        : undefined,
+      dto.locationId
+        ? this.prisma.location.findFirst({
+            where: { id: dto.locationId, tenantId },
+            select: { id: true },
+          })
+        : undefined,
+      dto.sourceId
+        ? this.prisma.source.findFirst({
+            where: { id: dto.sourceId, tenantId, type: 'viewing' },
+            select: { id: true },
+          })
+        : undefined,
+      dto.actorId
+        ? this.prisma.user.findFirst({ where: { id: dto.actorId, tenantId }, select: { id: true } })
+        : undefined,
+      dto.statusId
+        ? this.prisma.status.findFirst({
+            where: { id: dto.statusId, tenantId, type: 'viewing' },
+            select: { id: true },
+          })
+        : undefined,
+    ]);
+
+    if (dto.slotId && !slot) throw new Error('Inventory slot not found');
+    if (dto.leadId && !lead) throw new Error('Lead not found');
+    if (dto.locationId && !location) throw new Error('Location not found');
+    if (dto.sourceId && !source) throw new Error('Source not found');
+    if (dto.actorId && !actor) throw new Error('Actor not found');
+    if (dto.statusId && !status) throw new Error('Status not found');
+  }
+
   async createViewing(dto: CreateViewingDTO) {
     if (!dto.tenantId || !dto.scheduledAt) {
       throw new Error('Missing required fields: tenantId or scheduledAt');
     }
+
+    await this.validateRelations(dto, dto.tenantId);
 
     const defaultStatus = await this.statusRepository.findOne({
       tenantId: dto.tenantId,
@@ -51,7 +101,7 @@ export class ViewingUseCase {
       {
         status: true,
         slot: true,
-        lead: true,
+        lead: { include: { customer: true } },
         location: true,
         source: true,
         actor: {
@@ -96,7 +146,7 @@ export class ViewingUseCase {
         include: {
           status: true,
           slot: true,
-          lead: true,
+          lead: { include: { customer: true } },
           location: true,
           source: true,
           actor: {
@@ -127,6 +177,7 @@ export class ViewingUseCase {
 
   async updateViewing(id: string, tenantId: string, dto: UpdateViewingDTO) {
     await this.getViewing(id, tenantId);
+    await this.validateRelations(dto, tenantId);
 
     if (dto.statusId) {
       const status = await this.statusRepository.findById(dto.statusId);
@@ -175,6 +226,8 @@ export class ViewingUseCase {
     file: Express.Multer.File,
     payload: UpdateViewingDTO
   ) {
+    await this.getViewing(viewingId, tenantId);
+
     const closingStatus = await this.statusRepository.findOne({
       tenantId: tenantId,
       type: 'viewing',
@@ -236,6 +289,8 @@ export class ViewingUseCase {
   }
 
   async failViewing(viewingId: string, tenantId: string, reason?: string) {
+    await this.getViewing(viewingId, tenantId);
+
     const failedStatus = await this.statusRepository.findOne({
       tenantId: tenantId,
       type: 'viewing',

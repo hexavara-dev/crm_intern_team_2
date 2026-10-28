@@ -8,7 +8,8 @@ function castValue(value: any) {
 
 export function extractFilters(query: any): any {
   const filters: any = {};
-  const excludedKeys = ['page', 'limit', 'include'];
+  // Security-owned fields must never be accepted from query parameters.
+  const excludedKeys = ['page', 'limit', 'search', 'include', 'tenantId', 'password'];
 
   for (const key in query) {
     if (excludedKeys.includes(key)) continue;

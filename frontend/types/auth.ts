@@ -26,7 +26,6 @@ export interface RegisterData {
 }
 
 export interface AuthResponse {
-  token: string;
   user: AuthUser;
   tenant?: {
     id: string;
